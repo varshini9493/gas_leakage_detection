@@ -1,0 +1,111 @@
+#include "BluetoothSerial.h"
+String device_name = "ESP32-BT-Slave";
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
+#if !defined(CONFIG_BT_SPP_ENABLED)
+#error Serial Bluetooth not available or not enabled. It is only available for the ESP32 chip.
+#endif
+
+BluetoothSerial SerialBT;
+
+byte MQ6_Pin = A0;          /* Define A0 for MQ Sensor Pin */
+float Referance_V = 3300.0; /* ESP32 Referance Voltage in mV */
+float RL = 1.0;             /* In Module RL value is 1k Ohm */
+float Ro = 10.0;            /* The Ro value is 10k Ohm */
+float mVolt = 0.0;
+const float Ro_clean_air_factor = 10.0;float Get_mVolt(byte AnalogPin);
+int c=1;void msgsend();void msg1send();
+void setup() {
+ Serial.begin(115200);Serial2.begin(115200);
+  SerialBT.begin(device_name); //Bluetooth device name
+  Serial.printf("The device with name \"%s\" is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str());
+  //Serial.printf("The device with name \"%s\" and MAC address %s is started.\nNow you can pair it with Bluetooth!\n", device_name.c_str(), SerialBT.getMacString()); // Use this after the MAC method is implemented
+  #ifdef USE_PIN
+    SerialBT.setPin(pin);
+    Serial.println("Using PIN");
+  #endif
+
+ pinMode(MQ6_Pin, INPUT);  /* Define A0 as a INPUT Pin */
+  delay(500);
+  Serial.println("Wait for 15 sec warmup");
+  delay(15000);             /* Set the warmup delay wich is 30 Sec */
+  Serial.println("Warmup Complete");
+  pinMode(2,OUTPUT); //Buzzer
+  pinMode(4,OUTPUT);// Power Relay 
+  for(int i=0; i<30; i++){
+    mVolt += Get_mVolt(MQ6_Pin);
+  }
+  mVolt = mVolt /30.0;      /* Get the volatage in mV for 30 Samples */
+  Serial.print("Voltage at A0 Pin = ");
+  Serial.print(mVolt);
+  Serial.println("mVolt");
+ 
+    mVolt = 0.0;
+}
+
+void loop() {
+  for(int i=0; i<500; i++){
+    mVolt += Get_mVolt(MQ6_Pin);
+  }
+  mVolt = mVolt/500.0;     
+  Serial.print("Voltage at A0 Pin = ");
+  Serial.print(mVolt);     
+  Serial.println(" mV");
+ if(mVolt>1800&&c)
+  {Serial.println("HIGH");digitalWrite(2,HIGH);digitalWrite(4,HIGH);SerialBT.println("GAS level is high");SerialBT.print("GAS level=");
+  SerialBT.println(mVolt);c=0;msgsend();delay(30000);msg1send();}
+ else if(mVolt<1800&&!c)
+   {Serial.println("LOW");digitalWrite(2,LOW);digitalWrite(4,LOW);SerialBT.println("GAS level is LOW");SerialBT.print("GAS level=");
+   SerialBT.println(mVolt);c=1;}
+  
+delay(20);
+mVolt = 0.0;     
+
+}
+float Get_mVolt(byte AnalogPin) {
+/* Calculate the ADC Voltage using below equation
+ *  mVolt = ADC_Count * (ADC_Referance_Voltage / ADC_Resolution)
+ */
+  int ADC_Value = analogRead(AnalogPin); 
+  delay(1);
+  float mVolt = ADC_Value * (Referance_V / 4096.0);
+  return mVolt;
+}
+
+void msgsend()
+{
+ Serial.println("Setting the GSM in text mode");
+    Serial2.println("AT+CMGF=1\r");
+   delay(2000);
+   Serial.println("Sending SMS to the desired phone number!");
+  Serial2.println("AT+CMGS=\"9493784869\"\r");
+   // Replace x with mobile number
+   delay(1000);
+   Serial2.println("GAS Leakage is Detected");    // SMS Text
+   Serial2.println(" https://maps.app.goo.gl/BQFT5MDSqumT13MT6");
+   delay(200);
+   Serial2.println((char)26);               // ASCII code of CTRL+Z
+   delay(1500);
+   Serial2.println("ATD9493784869;");delay(30000);
+}
+
+
+void msg1send()
+{
+ Serial.println("Setting the GSM in text mode");
+    Serial2.println("AT+CMGF=1\r");
+   delay(2000);
+   Serial.println("Sending SMS to the desired phone number!");
+  Serial2.println("AT+CMGS=\"9133687139\"\r");
+   // Replace x with mobile number
+   delay(1000);
+   Serial2.println("GAS Leakage is Detected");    // SMS Text
+    Serial2.println(" https://maps.app.goo.gl/BQFT5MDSqumT13MT6");
+   delay(200);
+   Serial2.println((char)26);               // ASCII code of CTRL+Z
+   delay(1500);
+   Serial2.println("ATD9133687139;");delay(30000);
+}
